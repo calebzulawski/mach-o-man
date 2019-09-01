@@ -49,6 +49,24 @@ impl Magic {
             _ => r.read_u32_into::<BigEndian>(dst),
         }
     }
+
+    pub(crate) fn read_u64<R: Read>(&self, r: &mut R) -> Result<u64, std::io::Error> {
+        match self {
+            Magic::LittleEndian | Magic::LittleEndian64 => r.read_u64::<LittleEndian>(),
+            _ => r.read_u64::<BigEndian>(),
+        }
+    }
+
+    pub(crate) fn read_u64_into<R: Read>(
+        &self,
+        r: &mut R,
+        dst: &mut [u64],
+    ) -> Result<(), std::io::Error> {
+        match self {
+            Magic::LittleEndian | Magic::LittleEndian64 => r.read_u64_into::<LittleEndian>(dst),
+            _ => r.read_u64_into::<BigEndian>(dst),
+        }
+    }
 }
 
 #[derive(PartialEq, Debug)]
