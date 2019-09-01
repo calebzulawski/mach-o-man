@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::header::Header;
 use std::io::{Read, Seek};
 
+#[derive(PartialEq, Debug)]
 pub enum LoadCommand {
     Unknown { command: u32, data: Vec<u8> },
 }
@@ -16,7 +17,7 @@ impl LoadCommand {
         {
             return Err(Error::InvalidLoadCommandSize(size));
         }
-        let mut data = vec![0u8; size as usize];
+        let mut data = vec![0u8; (size - 8) as usize];
         r.read_exact(&mut data)?;
         Ok(Self::Unknown {
             command: command,

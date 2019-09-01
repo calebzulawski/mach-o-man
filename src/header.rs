@@ -31,6 +31,24 @@ impl Magic {
             Self::BigEndian64 => constants::MH_CIGAM_64,
         }
     }
+
+    pub(crate) fn read_u32<R: Read>(&self, r: &mut R) -> Result<u32, std::io::Error> {
+        match self {
+            Magic::LittleEndian | Magic::LittleEndian64 => r.read_u32::<LittleEndian>(),
+            _ => r.read_u32::<BigEndian>(),
+        }
+    }
+
+    pub(crate) fn read_u32_into<R: Read>(
+        &self,
+        r: &mut R,
+        dst: &mut [u32],
+    ) -> Result<(), std::io::Error> {
+        match self {
+            Magic::LittleEndian | Magic::LittleEndian64 => r.read_u32_into::<LittleEndian>(dst),
+            _ => r.read_u32_into::<BigEndian>(dst),
+        }
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -155,24 +173,20 @@ impl Filetype {
 
 #[derive(PartialEq, Debug)]
 pub struct Header {
-    magic: Magic,
-    cputype: CpuType,
-    cpusubtype: CpuSubType,
-    filetype: Filetype,
-    ncmds: u32,
-    sizeofcmds: u32,
-    flags: u32,
+    pub magic: Magic,
+    pub cputype: CpuType,
+    pub cpusubtype: CpuSubType,
+    pub filetype: Filetype,
+    pub ncmds: u32,
+    pub sizeofcmds: u32,
+    pub flags: u32,
 }
 
 impl Header {
-    pub fn from_reader<R: Read + Seek>(r: &mut R) -> Result<Header, Error> {
+    pub fn from_reader<R: Read + Seek>(r: &mut R) -> Result<Self, Error> {
         let magic = Magic::from_u32(r.read_u32::<LittleEndian>()?)?;
         let mut vals: [u32; 6] = [0; 6];
-        if magic == Magic::LittleEndian || magic == Magic::LittleEndian64 {
-            r.read_u32_into::<LittleEndian>(&mut vals)?;
-        } else {
-            r.read_u32_into::<BigEndian>(&mut vals)?;
-        }
+        magic.read_u32_into(r, &mut vals)?;
         if magic == Magic::LittleEndian64 || magic == Magic::BigEndian64 {
             r.seek(std::io::SeekFrom::Current(4))?; // skip reserved field
         }
@@ -185,5 +199,21 @@ impl Header {
             sizeofcmds: vals[4],
             flags: vals[5],
         })
+    }
+
+    pub fn is_32_bit(&self) -> bool {
+        self.magic == Magic::LittleEndian || self.magic == Magic::BigEndian
+    }
+
+    pub fn is_64_bit(&self) -> bool {
+        self.magic == Magic::LittleEndian64 || self.magic == Magic::BigEndian64
+    }
+
+    pub fn is_little_endian(&self) -> bool {
+        self.magic == Magic::LittleEndian || self.magic == Magic::LittleEndian64
+    }
+
+    pub fn is_big_endian(&self) -> bool {
+        self.magic == Magic::BigEndian || self.magic == Magic::BigEndian64
     }
 }

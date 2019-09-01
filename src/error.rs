@@ -4,6 +4,7 @@ use std::convert::From;
 pub enum Error {
     IO(std::io::Error),
     InvalidMagic(u32),
+    InvalidLoadCommandSize(u32),
 }
 
 impl std::fmt::Display for Error {
@@ -11,6 +12,7 @@ impl std::fmt::Display for Error {
         match self {
             Self::IO(error) => write!(f, "IO error: {}", error),
             Self::InvalidMagic(val) => write!(f, "Invalid magic number: {:x}", val),
+            Self::InvalidLoadCommandSize(val) => write!(f, "Invalid load command size: {}", val),
         }
     }
 }
