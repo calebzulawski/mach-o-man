@@ -1,3 +1,4 @@
+use crate::constants;
 use crate::error::Error;
 
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
@@ -5,83 +6,68 @@ use std::io::{Read, Seek};
 
 #[derive(PartialEq, Debug)]
 pub enum Magic {
-    MAGIC,
-    CIGAM,
-    MAGIC_64,
-    CIGAM_64,
+    LittleEndian,
+    BigEndian,
+    LittleEndian64,
+    BigEndian64,
 }
-
-const MH_MAGIC: u32 = 0xfeedface;
-const MH_CIGAM: u32 = 0xcefaedfe;
-const MH_MAGIC_64: u32 = 0xfeedfacf;
-const MH_CIGAM_64: u32 = 0xcffaedfe;
 
 impl Magic {
     fn from_u32(v: u32) -> Result<Self, Error> {
         match v {
-            MH_MAGIC => Ok(Magic::MAGIC),
-            MH_CIGAM => Ok(Magic::CIGAM),
-            MH_MAGIC_64 => Ok(Magic::MAGIC_64),
-            MH_CIGAM_64 => Ok(Magic::CIGAM_64),
+            constants::MH_MAGIC => Ok(Magic::LittleEndian),
+            constants::MH_CIGAM => Ok(Magic::BigEndian),
+            constants::MH_MAGIC_64 => Ok(Magic::LittleEndian64),
+            constants::MH_CIGAM_64 => Ok(Magic::BigEndian64),
             value => Err(Error::InvalidMagic(value)),
         }
     }
 
     fn to_u32(&self) -> u32 {
         match self {
-            Self::MAGIC => MH_MAGIC,
-            Self::CIGAM => MH_CIGAM,
-            Self::MAGIC_64 => MH_MAGIC_64,
-            Self::CIGAM_64 => MH_CIGAM_64,
+            Self::LittleEndian => constants::MH_MAGIC,
+            Self::BigEndian => constants::MH_CIGAM,
+            Self::LittleEndian64 => constants::MH_MAGIC_64,
+            Self::BigEndian64 => constants::MH_CIGAM_64,
         }
     }
 }
 
 #[derive(PartialEq, Debug)]
 pub enum CpuType {
-    I386,
+    X86,
     X86_64,
-    ARM,
-    ARM64,
-    ARM64_32,
-    POWERPC,
-    POWERPC64,
+    Arm,
+    Arm64,
+    Arm64_32,
+    PowerPC,
+    PowerPC64,
     Unknown(u32),
 }
-
-const CPU_ARCH_ABI64: u32 = 0x01000000;
-const CPU_ARCH_ABI64_32: u32 = 0x02000000;
-const CPU_TYPE_I386: u32 = 7;
-const CPU_TYPE_X86_64: u32 = CPU_TYPE_I386 | CPU_ARCH_ABI64;
-const CPU_TYPE_ARM: u32 = 12;
-const CPU_TYPE_ARM64: u32 = CPU_TYPE_ARM | CPU_ARCH_ABI64;
-const CPU_TYPE_ARM64_32: u32 = CPU_TYPE_ARM | CPU_ARCH_ABI64_32;
-const CPU_TYPE_POWERPC: u32 = 18;
-const CPU_TYPE_POWERPC64: u32 = CPU_TYPE_POWERPC | CPU_ARCH_ABI64;
 
 impl CpuType {
     fn from_u32(v: u32) -> Self {
         match v {
-            CPU_TYPE_I386 => Self::I386,
-            CPU_TYPE_x86_64 => Self::X86_64,
-            CPU_TYPE_ARM => Self::ARM,
-            CPU_TYPE_ARM64 => Self::ARM64,
-            CPU_TYPE_ARM64_32 => Self::ARM64_32,
-            CPU_TYPE_POWERPC => Self::POWERPC,
-            CPU_TYPE_POWERPC64 => Self::POWERPC64,
+            constants::CPU_TYPE_I386 => Self::X86,
+            constants::CPU_TYPE_X86_64 => Self::X86_64,
+            constants::CPU_TYPE_ARM => Self::Arm,
+            constants::CPU_TYPE_ARM64 => Self::Arm64,
+            constants::CPU_TYPE_ARM64_32 => Self::Arm64_32,
+            constants::CPU_TYPE_POWERPC => Self::PowerPC,
+            constants::CPU_TYPE_POWERPC64 => Self::PowerPC64,
             unknown => Self::Unknown(unknown),
         }
     }
 
     fn to_u32(&self) -> u32 {
         match self {
-            Self::I386 => CPU_TYPE_I386,
-            Self::X86_64 => CPU_TYPE_X86_64,
-            Self::ARM => CPU_TYPE_ARM,
-            Self::ARM64 => CPU_TYPE_ARM64,
-            Self::ARM64_32 => CPU_TYPE_ARM64_32,
-            Self::POWERPC => CPU_TYPE_POWERPC,
-            Self::POWERPC64 => CPU_TYPE_POWERPC64,
+            Self::X86 => constants::CPU_TYPE_I386,
+            Self::X86_64 => constants::CPU_TYPE_X86_64,
+            Self::Arm => constants::CPU_TYPE_ARM,
+            Self::Arm64 => constants::CPU_TYPE_ARM64,
+            Self::Arm64_32 => constants::CPU_TYPE_ARM64_32,
+            Self::PowerPC => constants::CPU_TYPE_POWERPC,
+            Self::PowerPC64 => constants::CPU_TYPE_POWERPC64,
             Self::Unknown(value) => *value,
         }
     }
@@ -89,18 +75,27 @@ impl CpuType {
 
 #[derive(PartialEq, Debug)]
 pub enum CpuSubType {
+    Multiple,
+    X86,
+    X86_64,
     Unknown(u32),
 }
 
 impl CpuSubType {
     fn from_u32(v: u32) -> Self {
         match v {
+            constants::CPU_SUBTYPE_MULTIPLE => Self::Multiple,
+            constants::CPU_SUBTYPE_X86_ALL => Self::X86,
+            x if x == constants::CPU_SUBTYPE_X86_ALL | constants::CPU_SUBTYPE_LIB64 => Self::X86_64,
             unknown => Self::Unknown(unknown),
         }
     }
 
     fn to_u32(&self) -> u32 {
         match self {
+            Self::Multiple => constants::CPU_SUBTYPE_MULTIPLE,
+            Self::X86 => constants::CPU_SUBTYPE_X86_ALL,
+            Self::X86_64 => constants::CPU_SUBTYPE_X86_ALL | constants::CPU_SUBTYPE_LIB64,
             Self::Unknown(value) => *value,
         }
     }
@@ -108,63 +103,51 @@ impl CpuSubType {
 
 #[derive(PartialEq, Debug)]
 pub enum Filetype {
-    OBJECT,
-    EXECUTE,
-    FVMLIB,
-    CORE,
-    PRELOAD,
-    DYLIB,
-    DYLINKER,
-    BUNDLE,
-    DYLINK_STUB,
-    DSYM,
-    KEXT_BUNDLE,
+    Object,
+    Execute,
+    Fvmlib,
+    Core,
+    Preload,
+    Dylib,
+    Dylinker,
+    Bundle,
+    DylinkStub,
+    Dsym,
+    KextBundle,
     Unknown(u32),
 }
-
-const MH_OBJECT: u32 = 0x1;
-const MH_EXECUTE: u32 = 0x2;
-const MH_FVMLIB: u32 = 0x3;
-const MH_CORE: u32 = 0x4;
-const MH_PRELOAD: u32 = 0x5;
-const MH_DYLIB: u32 = 0x6;
-const MH_DYLINKER: u32 = 0x7;
-const MH_BUNDLE: u32 = 0x8;
-const MH_DYLINK_STUB: u32 = 0x9;
-const MH_DSYM: u32 = 0xa;
-const MH_KEXT_BUNDLE: u32 = 0xb;
 
 impl Filetype {
     fn from_u32(v: u32) -> Self {
         match v {
-            MH_OBJECT => Self::OBJECT,
-            MH_EXECUTE => Self::EXECUTE,
-            MH_FVMLIB => Self::FVMLIB,
-            MH_CORE => Self::CORE,
-            MH_PRELOAD => Self::PRELOAD,
-            MH_DYLIB => Self::DYLIB,
-            MH_DYLINKER => Self::DYLINKER,
-            MH_BUNDLE => Self::BUNDLE,
-            MH_DYLINK_STUB => Self::DYLINK_STUB,
-            MH_DSYM => Self::DSYM,
-            MH_KEXT_BUNDLE => Self::KEXT_BUNDLE,
+            constants::MH_OBJECT => Self::Object,
+            constants::MH_EXECUTE => Self::Execute,
+            constants::MH_FVMLIB => Self::Fvmlib,
+            constants::MH_CORE => Self::Core,
+            constants::MH_PRELOAD => Self::Preload,
+            constants::MH_DYLIB => Self::Dylib,
+            constants::MH_DYLINKER => Self::Dylinker,
+            constants::MH_BUNDLE => Self::Bundle,
+            constants::MH_DYLINK_STUB => Self::DylinkStub,
+            constants::MH_DSYM => Self::Dsym,
+            constants::MH_KEXT_BUNDLE => Self::KextBundle,
             unknown => Self::Unknown(unknown),
         }
     }
 
     fn to_u32(&self) -> u32 {
         match self {
-            Self::OBJECT => MH_OBJECT,
-            Self::EXECUTE => MH_EXECUTE,
-            Self::FVMLIB => MH_FVMLIB,
-            Self::CORE => MH_CORE,
-            Self::PRELOAD => MH_PRELOAD,
-            Self::DYLIB => MH_DYLIB,
-            Self::DYLINKER => MH_DYLINKER,
-            Self::BUNDLE => MH_BUNDLE,
-            Self::DYLINK_STUB => MH_DYLINK_STUB,
-            Self::DSYM => MH_DSYM,
-            Self::KEXT_BUNDLE => MH_KEXT_BUNDLE,
+            Self::Object => constants::MH_OBJECT,
+            Self::Execute => constants::MH_EXECUTE,
+            Self::Fvmlib => constants::MH_FVMLIB,
+            Self::Core => constants::MH_CORE,
+            Self::Preload => constants::MH_PRELOAD,
+            Self::Dylib => constants::MH_DYLIB,
+            Self::Dylinker => constants::MH_DYLINKER,
+            Self::Bundle => constants::MH_BUNDLE,
+            Self::DylinkStub => constants::MH_DYLINK_STUB,
+            Self::Dsym => constants::MH_DSYM,
+            Self::KextBundle => constants::MH_KEXT_BUNDLE,
             Self::Unknown(value) => *value,
         }
     }
@@ -185,12 +168,12 @@ impl Header {
     pub fn from_reader<R: Read + Seek>(r: &mut R) -> Result<Header, Error> {
         let magic = Magic::from_u32(r.read_u32::<LittleEndian>()?)?;
         let mut vals: [u32; 6] = [0; 6];
-        if magic == Magic::MAGIC || magic == Magic::MAGIC_64 {
+        if magic == Magic::LittleEndian || magic == Magic::LittleEndian64 {
             r.read_u32_into::<LittleEndian>(&mut vals)?;
         } else {
             r.read_u32_into::<BigEndian>(&mut vals)?;
         }
-        if magic == Magic::MAGIC_64 || magic == Magic::CIGAM_64 {
+        if magic == Magic::LittleEndian64 || magic == Magic::BigEndian64 {
             r.seek(std::io::SeekFrom::Current(4))?; // skip reserved field
         }
         Ok(Self {
