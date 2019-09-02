@@ -6,6 +6,7 @@ pub enum Error {
     InvalidMagic(u32),
     InvalidLoadCommandSize(u32),
     BadStringParse(Vec<u8>),
+    BadString(String),
 }
 
 impl std::fmt::Display for Error {
@@ -14,7 +15,8 @@ impl std::fmt::Display for Error {
             Self::IO(error) => write!(f, "IO error: {}", error),
             Self::InvalidMagic(val) => write!(f, "Invalid magic number: {:x}", val),
             Self::InvalidLoadCommandSize(val) => write!(f, "Invalid load command size: {}", val),
-            Self::BadStringParse(bytes) => write!(f, "Bad string: {:?}", bytes),
+            Self::BadStringParse(bytes) => write!(f, "Bad parsed string: {:?}", bytes),
+            Self::BadString(string) => write!(f, "Bad string: {:?}", string),
         }
     }
 }

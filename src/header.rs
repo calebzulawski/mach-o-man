@@ -1,7 +1,9 @@
 use crate::constants;
 use crate::error::Error;
+use crate::extract;
+use crate::extractor::Extractor;
 
-use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
+use std::convert::{TryFrom, TryInto};
 use std::io::{Read, Seek};
 
 #[derive(PartialEq, Debug)]
@@ -13,6 +15,13 @@ pub enum Magic {
 }
 
 impl Magic {
+    pub(crate) fn get_extractor<'a, R: Read + Seek>(&self, r: &'a mut R) -> Extractor<'a> {
+        match self {
+            Self::LittleEndian | Self::LittleEndian64 => Extractor::little_endian(r),
+            Self::BigEndian | Self::BigEndian64 => Extractor::big_endian(r),
+        }
+    }
+
     fn from_u32(v: u32) -> Result<Self, Error> {
         match v {
             constants::MH_MAGIC => Ok(Magic::LittleEndian),
@@ -31,41 +40,13 @@ impl Magic {
             Self::BigEndian64 => constants::MH_CIGAM_64,
         }
     }
+}
 
-    pub(crate) fn read_u32<R: Read>(&self, r: &mut R) -> Result<u32, std::io::Error> {
-        match self {
-            Magic::LittleEndian | Magic::LittleEndian64 => r.read_u32::<LittleEndian>(),
-            _ => r.read_u32::<BigEndian>(),
-        }
-    }
+impl TryFrom<&mut Extractor<'_>> for Magic {
+    type Error = Error;
 
-    pub(crate) fn read_u32_into<R: Read>(
-        &self,
-        r: &mut R,
-        dst: &mut [u32],
-    ) -> Result<(), std::io::Error> {
-        match self {
-            Magic::LittleEndian | Magic::LittleEndian64 => r.read_u32_into::<LittleEndian>(dst),
-            _ => r.read_u32_into::<BigEndian>(dst),
-        }
-    }
-
-    pub(crate) fn read_u64<R: Read>(&self, r: &mut R) -> Result<u64, std::io::Error> {
-        match self {
-            Magic::LittleEndian | Magic::LittleEndian64 => r.read_u64::<LittleEndian>(),
-            _ => r.read_u64::<BigEndian>(),
-        }
-    }
-
-    pub(crate) fn read_u64_into<R: Read>(
-        &self,
-        r: &mut R,
-        dst: &mut [u64],
-    ) -> Result<(), std::io::Error> {
-        match self {
-            Magic::LittleEndian | Magic::LittleEndian64 => r.read_u64_into::<LittleEndian>(dst),
-            _ => r.read_u64_into::<BigEndian>(dst),
-        }
+    fn try_from(e: &mut Extractor) -> Result<Self, Self::Error> {
+        Ok(Magic::from_u32(e.try_into()?)?)
     }
 }
 
@@ -109,6 +90,14 @@ impl CpuType {
     }
 }
 
+impl TryFrom<&mut Extractor<'_>> for CpuType {
+    type Error = Error;
+
+    fn try_from(e: &mut Extractor) -> Result<Self, Self::Error> {
+        Ok(CpuType::from_u32(e.try_into()?))
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum CpuSubType {
     Multiple,
@@ -134,6 +123,14 @@ impl CpuSubType {
             Self::X86_64 => constants::CPU_SUBTYPE_X86_ALL | constants::CPU_SUBTYPE_LIB64,
             Self::Unknown(value) => *value,
         }
+    }
+}
+
+impl TryFrom<&mut Extractor<'_>> for CpuSubType {
+    type Error = Error;
+
+    fn try_from(e: &mut Extractor) -> Result<Self, Self::Error> {
+        Ok(CpuSubType::from_u32(e.try_into()?))
     }
 }
 
@@ -189,6 +186,14 @@ impl Filetype {
     }
 }
 
+impl TryFrom<&mut Extractor<'_>> for Filetype {
+    type Error = Error;
+
+    fn try_from(e: &mut Extractor) -> Result<Self, Self::Error> {
+        Ok(Filetype::from_u32(e.try_into()?))
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub struct Header {
     pub magic: Magic,
@@ -202,21 +207,21 @@ pub struct Header {
 
 impl Header {
     pub fn from_reader<R: Read + Seek>(r: &mut R) -> Result<Self, Error> {
-        let magic = Magic::from_u32(r.read_u32::<LittleEndian>()?)?;
-        let mut vals: [u32; 6] = [0; 6];
-        magic.read_u32_into(r, &mut vals)?;
-        if magic == Magic::LittleEndian64 || magic == Magic::BigEndian64 {
+        let magic = Magic::from_u32((&mut Extractor::little_endian(r)).try_into()?)?;
+        let mut e = magic.get_extractor(r);
+        let header = Self {
+            magic: magic,
+            cputype: extract!(e),
+            cpusubtype: extract!(e),
+            filetype: extract!(e),
+            ncmds: extract!(e),
+            sizeofcmds: extract!(e),
+            flags: extract!(e),
+        };
+        if header.is_64_bit() {
             r.seek(std::io::SeekFrom::Current(4))?; // skip reserved field
         }
-        Ok(Self {
-            magic: magic,
-            cputype: CpuType::from_u32(vals[0]),
-            cpusubtype: CpuSubType::from_u32(vals[1]),
-            filetype: Filetype::from_u32(vals[2]),
-            ncmds: vals[3],
-            sizeofcmds: vals[4],
-            flags: vals[5],
-        })
+        Ok(header)
     }
 
     pub fn is_32_bit(&self) -> bool {

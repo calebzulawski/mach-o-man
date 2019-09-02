@@ -1,6 +1,7 @@
 pub mod command;
 mod constants;
 pub mod error;
+mod extractor;
 pub mod header;
 pub mod macho;
 pub use command::LoadCommand;
