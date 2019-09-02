@@ -7,7 +7,7 @@ fn main() -> Result<(), Error> {
         let f = File::open(&file)?;
         let mut reader = BufReader::new(f);
         let object = MachO::from_reader(&mut reader);
-        println!("{}:\n{:#?}", file, object);
+        println!("{}:\n{:#x?}", file, object);
     }
     Ok(())
 }

@@ -6,7 +6,7 @@ use crate::{extract, extractable};
 use std::convert::{TryFrom, TryInto};
 use std::io::{Read, Seek, SeekFrom};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq)]
 pub struct NameString {
     name: String,
 }
@@ -34,6 +34,12 @@ impl NameString {
         } else {
             Ok(Self { name: name })
         }
+    }
+}
+
+impl std::fmt::Debug for NameString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.name)
     }
 }
 
@@ -102,11 +108,73 @@ extractable!(Section64 {
     reserved3: u32,
 });
 
+extractable!(SymtabCommand {
+    symoff: u32,
+    nsyms: u32,
+    stroff: u32,
+    strsize: u32,
+});
+
+extractable!(DysymtabCommand {
+    ilocalsym: u32,
+    nlocalsym: u32,
+    iextdefsym: u32,
+    nextdefsym: u32,
+    iundefsym: u32,
+    nundefsym: u32,
+    tocoff: u32,
+    ntoc: u32,
+    modtaboff: u32,
+    nmodtab: u32,
+    extrefsymoff: u32,
+    nextrefsyms: u32,
+    indirectsymoff: u32,
+    nindirectsyms: u32,
+    extreloff: u32,
+    nextrel: u32,
+    locreloff: u32,
+    nlocrel: u32,
+});
+
+extractable!(TwoLevelHintsCommand {
+    offset: u32,
+    nhints: u32,
+});
+
+extractable!(DyldInfoCommand {
+    rebase_off: u32,
+    rebase_size: u32,
+    bind_off: u32,
+    bind_size: u32,
+    weak_bind_off: u32,
+    weak_bind_size: u32,
+    lazy_bind_off: u32,
+    lazy_bind_size: u32,
+    export_off: u32,
+    export_size: u32,
+});
+
+extractable!(LinkeditDataCommand {
+    dataoff: u32,
+    datasize: u32,
+});
+
 #[derive(PartialEq, Debug)]
 pub enum LoadCommand {
     Uuid(UuidCommand),
     Segment(SegmentCommand),
     Segment64(SegmentCommand64),
+    Symtab(SymtabCommand),
+    Dysymtab(DysymtabCommand),
+    TwoLevelHints(TwoLevelHintsCommand),
+    DyldInfo(DyldInfoCommand),
+    DyldInfoOnly(DyldInfoCommand),
+    CodeSignature(LinkeditDataCommand),
+    SegmentSplitInfo(LinkeditDataCommand),
+    FunctionStarts(LinkeditDataCommand),
+    DataInCode(LinkeditDataCommand),
+    DylibCodeSignDrs(LinkeditDataCommand),
+    LinkerOptimizationHint(LinkeditDataCommand),
     Unknown { cmd: u32, data: Vec<u8> },
 }
 
@@ -138,6 +206,19 @@ impl LoadCommand {
                     command.sections.push(extract!(e));
                 }
                 LoadCommand::Segment64(command)
+            }
+            constants::LC_SYMTAB => LoadCommand::Symtab(extract!(e)),
+            constants::LC_DYSYMTAB => LoadCommand::Dysymtab(extract!(e)),
+            constants::LC_TWOLEVEL_HINTS => LoadCommand::TwoLevelHints(extract!(e)),
+            constants::LC_DYLD_INFO => LoadCommand::DyldInfo(extract!(e)),
+            constants::LC_DYLD_INFO_ONLY => LoadCommand::DyldInfoOnly(extract!(e)),
+            constants::LC_CODE_SIGNATURE => LoadCommand::CodeSignature(extract!(e)),
+            constants::LC_SEGMENT_SPLIT_INFO => LoadCommand::SegmentSplitInfo(extract!(e)),
+            constants::LC_FUNCTION_STARTS => LoadCommand::FunctionStarts(extract!(e)),
+            constants::LC_DATA_IN_CODE => LoadCommand::DataInCode(extract!(e)),
+            constants::LC_DYLIB_CODE_SIGN_DRS => LoadCommand::DylibCodeSignDrs(extract!(e)),
+            constants::LC_LINKER_OPTIMIZATION_HINT => {
+                LoadCommand::LinkerOptimizationHint(extract!(e))
             }
             _ => {
                 let mut data = vec![0u8; (size - 8) as usize];
